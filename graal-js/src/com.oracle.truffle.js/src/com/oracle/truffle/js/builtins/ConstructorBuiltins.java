@@ -93,6 +93,7 @@ import com.oracle.truffle.js.builtins.ConstructorBuiltinsFactory.ConstructDispla
 import com.oracle.truffle.js.builtins.ConstructorBuiltinsFactory.ConstructErrorNodeGen;
 import com.oracle.truffle.js.builtins.ConstructorBuiltinsFactory.ConstructFinalizationRegistryNodeGen;
 import com.oracle.truffle.js.builtins.ConstructorBuiltinsFactory.ConstructFunctionNodeGen;
+import com.oracle.truffle.js.builtins.ConstructorBuiltinsFactory.ConstructIteratorNodeGen;
 import com.oracle.truffle.js.builtins.ConstructorBuiltinsFactory.ConstructJSAdapterNodeGen;
 import com.oracle.truffle.js.builtins.ConstructorBuiltinsFactory.ConstructJSProxyNodeGen;
 import com.oracle.truffle.js.builtins.ConstructorBuiltinsFactory.ConstructJavaImporterNodeGen;
@@ -217,6 +218,7 @@ import com.oracle.truffle.js.runtime.builtins.JSDateObject;
 import com.oracle.truffle.js.runtime.builtins.JSError;
 import com.oracle.truffle.js.runtime.builtins.JSErrorObject;
 import com.oracle.truffle.js.runtime.builtins.JSFinalizationRegistry;
+import com.oracle.truffle.js.runtime.builtins.JSIterator;
 import com.oracle.truffle.js.runtime.builtins.JSMap;
 import com.oracle.truffle.js.runtime.builtins.JSNumber;
 import com.oracle.truffle.js.runtime.builtins.JSOrdinary;
@@ -333,6 +335,7 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
         FinalizationRegistry(1),
         WeakMap(0),
         WeakSet(0),
+        Iterator(0),
         GeneratorFunction(1),
         Proxy(2),
         Promise(1),
@@ -594,6 +597,13 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
                 if (construct) {
                     return newTarget ? ConstructWeakSetNodeGen.create(context, builtin, true, args().newTarget().fixedArgs(1).createArgumentNodes(context))
                                     : ConstructWeakSetNodeGen.create(context, builtin, false, args().function().fixedArgs(1).createArgumentNodes(context));
+                } else {
+                    return createCallRequiresNew(context, builtin);
+                }
+            case Iterator:
+                if (construct) {
+                    return newTarget ? ConstructIteratorNodeGen.create(context, builtin, true, args().newTarget().varArgs().createArgumentNodes(context))
+                                    : ConstructIteratorNodeGen.create(context, builtin, false, args().function().varArgs().createArgumentNodes(context));
                 } else {
                     return createCallRequiresNew(context, builtin);
                 }
@@ -2799,6 +2809,22 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
             return realm.getSetPrototype();
         }
 
+    }
+
+    public abstract static class ConstructIteratorNode extends ConstructWithNewTargetNode {
+        public ConstructIteratorNode(JSContext context, JSBuiltin builtin, boolean isNewTargetCase) {
+            super(context, builtin, isNewTargetCase);
+        }
+
+        @Specialization
+        protected JSDynamicObject constructIterator(JSDynamicObject newTarget, @SuppressWarnings("unused") Object[] args) {
+            return swapPrototype(JSIterator.create(getContext(), getRealm()), newTarget);
+        }
+
+        @Override
+        protected JSDynamicObject getIntrinsicDefaultProto(JSRealm realm) {
+            return realm.getIteratorPrototype();
+        }
     }
 
     public abstract static class ConstructWeakSetNode extends ConstructSetNode {
