@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,43 +38,35 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.js.nodes.access;
+package com.oracle.truffle.js.runtime.builtins;
 
-import com.oracle.truffle.js.nodes.JavaScriptBaseNode;
-import com.oracle.truffle.js.runtime.JSContext;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.object.Shape;
+import com.oracle.truffle.api.strings.TruffleString;
+import com.oracle.truffle.js.runtime.JSRealm;
 import com.oracle.truffle.js.runtime.objects.IteratorRecord;
+import com.oracle.truffle.js.runtime.objects.JSNonProxyObject;
 
-/**
- * ES6 7.4.5 IteratorStep(iterator).
- */
-public class IteratorStepNode extends JavaScriptBaseNode {
-    @Child private IteratorNextNode iteratorNextNode;
-    @Child private IteratorCompleteNode iteratorCompleteNode;
+@ExportLibrary(InteropLibrary.class)
+public final class JSWrapForIteratorObject extends JSNonProxyObject {
+    private final IteratorRecord iterated;
 
-    protected IteratorStepNode(JSContext context) {
-        this.iteratorNextNode = IteratorNextNode.create();
-        this.iteratorCompleteNode = IteratorCompleteNode.create(context);
+    protected JSWrapForIteratorObject(Shape shape, IteratorRecord iterated) {
+        super(shape);
+        this.iterated = iterated;
     }
 
-    public static IteratorStepNode create(JSContext context) {
-        return new IteratorStepNode(context);
+    public IteratorRecord getIterated() {
+        return iterated;
     }
 
-    public Object execute(IteratorRecord iteratorRecord) {
-        Object result = iteratorNextNode.execute(iteratorRecord);
-        Object done = iteratorCompleteNode.execute(result);
-        if (done == Boolean.TRUE) {
-            return false;
-        }
-        return result;
+    @Override
+    public TruffleString getClassName() {
+        return JSIterator.CLASS_NAME;
     }
 
-    public Object execute(IteratorRecord iteratorRecord, Object value) {
-        Object result = iteratorNextNode.execute(iteratorRecord, value);
-        Object done = iteratorCompleteNode.execute(result);
-        if (done == Boolean.TRUE) {
-            return false;
-        }
-        return result;
+    public static JSWrapForIteratorObject create(JSRealm realm, JSObjectFactory factory, IteratorRecord iterated) {
+        return factory.initProto(new JSWrapForIteratorObject(factory.getShape(realm), iterated), realm);
     }
 }

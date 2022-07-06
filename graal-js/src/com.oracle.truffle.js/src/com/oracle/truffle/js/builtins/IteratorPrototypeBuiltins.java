@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,43 +38,48 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.js.nodes.access;
+package com.oracle.truffle.js.builtins;
 
-import com.oracle.truffle.js.nodes.JavaScriptBaseNode;
+import com.oracle.truffle.js.nodes.function.JSBuiltin;
 import com.oracle.truffle.js.runtime.JSContext;
-import com.oracle.truffle.js.runtime.objects.IteratorRecord;
+import com.oracle.truffle.js.runtime.builtins.BuiltinEnum;
+import com.oracle.truffle.js.runtime.builtins.JSArray;
 
 /**
- * ES6 7.4.5 IteratorStep(iterator).
+ * Contains builtins for {@linkplain JSArray}.prototype.
  */
-public class IteratorStepNode extends JavaScriptBaseNode {
-    @Child private IteratorNextNode iteratorNextNode;
-    @Child private IteratorCompleteNode iteratorCompleteNode;
+public final class IteratorPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<IteratorPrototypeBuiltins.IteratorPrototype> {
 
-    protected IteratorStepNode(JSContext context) {
-        this.iteratorNextNode = IteratorNextNode.create();
-        this.iteratorCompleteNode = IteratorCompleteNode.create(context);
+    public static final JSBuiltinsContainer BUILTINS = new IteratorPrototypeBuiltins();
+
+    protected IteratorPrototypeBuiltins() {
+        super(JSArray.PROTOTYPE_NAME, IteratorPrototype.class);
     }
 
-    public static IteratorStepNode create(JSContext context) {
-        return new IteratorStepNode(context);
-    }
+    public enum IteratorPrototype implements BuiltinEnum<IteratorPrototype> {
+        dummy(0);
 
-    public Object execute(IteratorRecord iteratorRecord) {
-        Object result = iteratorNextNode.execute(iteratorRecord);
-        Object done = iteratorCompleteNode.execute(result);
-        if (done == Boolean.TRUE) {
-            return false;
+        private final int length;
+
+        IteratorPrototype(int length) {
+            this.length = length;
         }
-        return result;
+
+        @Override
+        public int getLength() {
+            return length;
+        }
+
+        @Override
+        public int getECMAScriptVersion() {
+            return BuiltinEnum.super.getECMAScriptVersion();
+        }
     }
 
-    public Object execute(IteratorRecord iteratorRecord, Object value) {
-        Object result = iteratorNextNode.execute(iteratorRecord, value);
-        Object done = iteratorCompleteNode.execute(result);
-        if (done == Boolean.TRUE) {
-            return false;
+    @Override
+    protected Object createNode(JSContext context, JSBuiltin builtin, boolean construct, boolean newTarget, IteratorPrototype builtinEnum) {
+        switch (builtinEnum) {
         }
-        return result;
+        return null;
     }
 }

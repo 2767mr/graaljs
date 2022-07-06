@@ -49,6 +49,7 @@ import com.oracle.truffle.js.runtime.objects.JSNonProxyObject;
 
 @ExportLibrary(InteropLibrary.class)
 public final class JSIteratorObject extends JSNonProxyObject {
+
     protected JSIteratorObject(Shape shape) {
         super(shape);
     }
@@ -56,10 +57,6 @@ public final class JSIteratorObject extends JSNonProxyObject {
     @Override
     public TruffleString getClassName() {
         return JSIterator.CLASS_NAME;
-    }
-
-    public static JSIteratorObject create(Shape shape) {
-        return new JSIteratorObject(shape);
     }
 
     public static JSIteratorObject create(JSRealm realm, JSObjectFactory factory) {
