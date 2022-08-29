@@ -53,6 +53,7 @@ import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.api.strings.TruffleString;
 import com.oracle.truffle.js.builtins.ArrayFunctionBuiltins;
 import com.oracle.truffle.js.builtins.ArrayPrototypeBuiltins;
+import com.oracle.truffle.js.builtins.TestPrototypeBuiltins;
 import com.oracle.truffle.js.runtime.Errors;
 import com.oracle.truffle.js.runtime.JSConfig;
 import com.oracle.truffle.js.runtime.JSContext;
@@ -204,7 +205,7 @@ public final class JSArray extends JSAbstractArray implements JSConstructorFacto
         JSObjectUtil.setOrVerifyPrototype(ctx, arrayPrototype, realm.getObjectPrototype());
 
         putConstructorProperty(ctx, arrayPrototype, ctor);
-        putFunctionsFromContainer(realm, arrayPrototype, ArrayPrototypeBuiltins.BUILTINS);
+        putFunctionsFromContainer(realm, arrayPrototype, TestPrototypeBuiltins.BUILTINS);
         // sets the length just for the prototype
         // putProxyProperty(arrayPrototype, ARRAY_LENGTH_PROXY_PROPERTY);
         JSObjectUtil.putProxyProperty(arrayPrototype, LENGTH, ARRAY_LENGTH_PROPERTY_PROXY, JSAttributes.notConfigurableNotEnumerableWritable());
