@@ -3,6 +3,7 @@ package com.oracle.truffle.js.builtins;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.HiddenKey;
 import com.oracle.truffle.js.nodes.JavaScriptNode;
 import com.oracle.truffle.js.nodes.access.CreateObjectNode;
@@ -21,7 +22,11 @@ import com.oracle.truffle.js.runtime.JavaScriptRootNode;
 import com.oracle.truffle.js.runtime.Strings;
 import com.oracle.truffle.js.runtime.builtins.BuiltinEnum;
 import com.oracle.truffle.js.runtime.builtins.JSArray;
+import com.oracle.truffle.js.runtime.builtins.JSFunction;
+import com.oracle.truffle.js.runtime.builtins.JSFunctionData;
 import com.oracle.truffle.js.runtime.objects.JSDynamicObject;
+import com.oracle.truffle.js.runtime.objects.JSObject;
+import com.oracle.truffle.js.runtime.objects.JSObjectUtil;
 import com.oracle.truffle.js.runtime.objects.Undefined;
 
 public final class TestPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<TestPrototypeBuiltins.TestPrototype> {
@@ -77,8 +82,13 @@ public final class TestPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<
             @Child private PropertyGetNode getFuncNode;
             @Child private JavaScriptNode argNode;
 
+            private final JSContext context;
+
             private InnerRootNode(JSContext context) {
                 super();
+
+                this.context = context;
+
                 callMapperNode = JSFunctionCallNode.createCall();
                 callTargetNode = JSFunctionCallNode.createCall();
                 getMapperNode = PropertyGetNode.createGetHidden(FUNC_ID, context);
@@ -99,6 +109,21 @@ public final class TestPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<
                 return callMapperNode.executeCall(JSArguments.createOneArg(Undefined.instance, mapper, result));
             }
 
+            @Override
+            public boolean isCloningAllowed() {
+                return true;
+            }
+
+            @Override
+            protected boolean isCloneUninitializedSupported() {
+                return true;
+            }
+
+            @Override
+            protected RootNode cloneUninitialized() {
+                return create(context);
+            }
+
             public static InnerRootNode create(JSContext context) {
                 return new InnerRootNode(context);
             }
@@ -108,8 +133,8 @@ public final class TestPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<
         @Child private PropertySetNode setFuncNode;
         @Child private PropertySetNode setTargetNode;
         @Child private PropertySetNode setCallbackNode;
-        @Child private InnerRootNode innerRootNode;
 
+        private final JSFunctionData innerFn;
         private final JSDynamicObject prototype;
 
         protected TestBuiltin(JSContext context, JSBuiltin builtin) {
@@ -120,7 +145,7 @@ public final class TestPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<
             setFuncNode = PropertySetNode.createSetHidden(FUNC_ID, context);
             setTargetNode = PropertySetNode.createSetHidden(TARGET_ID, context);
             setCallbackNode = PropertySetNode.createSetHidden(CALLBACK_ID, context);
-            innerRootNode = InnerRootNode.create(context);
+            innerFn = JSFunctionData.create(context, new InnerRootNode(context).getCallTarget(), 0, Strings.EMPTY);
         }
 
         @Specialization
@@ -128,7 +153,7 @@ public final class TestPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<
             JSDynamicObject result = createObjectNode.execute(this.prototype);
             setTargetNode.setValue(result, thisObj);
             setFuncNode.setValue(result, func);
-            setCallbackNode.setValue(result, innerRootNode.getCallTarget());
+            setCallbackNode.setValue(result, JSFunction.create(getRealm(), innerFn));
             return result;
         }
 
@@ -144,20 +169,20 @@ public final class TestPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<
     }
 
     public abstract static class TestNextBuiltin extends JSBuiltinNode {
-        @Child private InternalCallNode callNode;
+        @Child private JSFunctionCallNode callNode;
         @Child private PropertyGetNode getCallBackNode;
 
         public TestNextBuiltin(JSContext context, JSBuiltin builtin) {
             super(context, builtin);
 
-            callNode = InternalCallNode.create();
+            callNode = JSFunctionCallNode.createCall();
             getCallBackNode = PropertyGetNode.createGetHidden(CALLBACK_ID, context);
         }
 
         @Specialization
         public Object next(VirtualFrame frame, Object thisObj, Object arg) {
             //Inlining the call here manually does resolve the issue but would not allow for multiple InnerRootNode implementations
-            return callNode.execute((CallTarget) getCallBackNode.getValue(thisObj), frame.getArguments());
+            return callNode.executeCall(JSArguments.createOneArg(thisObj, getCallBackNode.getValue(thisObj), arg));
         }
     }
 }
