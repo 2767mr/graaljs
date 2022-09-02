@@ -1,19 +1,25 @@
 package com.oracle.truffle.js.builtins;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.object.HiddenKey;
+import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.js.nodes.JavaScriptNode;
+import com.oracle.truffle.js.nodes.access.CreateIterResultObjectNode;
 import com.oracle.truffle.js.nodes.access.CreateObjectNode;
 import com.oracle.truffle.js.nodes.access.PropertyGetNode;
 import com.oracle.truffle.js.nodes.access.PropertySetNode;
 import com.oracle.truffle.js.nodes.arguments.AccessIndexedArgumentNode;
+import com.oracle.truffle.js.nodes.cast.JSToBooleanNode;
 import com.oracle.truffle.js.nodes.function.InternalCallNode;
 import com.oracle.truffle.js.nodes.function.JSBuiltin;
 import com.oracle.truffle.js.nodes.function.JSBuiltinNode;
 import com.oracle.truffle.js.nodes.function.JSFunctionCallNode;
+import com.oracle.truffle.js.runtime.Errors;
 import com.oracle.truffle.js.runtime.JSArguments;
 import com.oracle.truffle.js.runtime.JSConfig;
 import com.oracle.truffle.js.runtime.JSContext;
@@ -28,18 +34,20 @@ import com.oracle.truffle.js.runtime.objects.JSDynamicObject;
 import com.oracle.truffle.js.runtime.objects.JSObject;
 import com.oracle.truffle.js.runtime.objects.JSObjectUtil;
 import com.oracle.truffle.js.runtime.objects.Undefined;
+import com.oracle.truffle.js.runtime.util.SimpleArrayList;
 
 public final class TestPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<TestPrototypeBuiltins.TestPrototype> {
 
     public static final JSBuiltinsContainer BUILTINS = new TestPrototypeBuiltins();
 
     protected TestPrototypeBuiltins() {
-        super(JSArray.PROTOTYPE_NAME, TestPrototype.class);
+        super(Strings.constant("Test.prototype"), TestPrototype.class);
     }
 
     public enum TestPrototype implements BuiltinEnum<TestPrototype> {
-        test(2),
-        next(1);
+        test(1),
+        next(0),
+        toArray(0);
 
         private final int length;
 
@@ -62,79 +70,21 @@ public final class TestPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<
     protected Object createNode(JSContext context, JSBuiltin builtin, boolean construct, boolean newTarget, TestPrototype builtinEnum) {
         switch (builtinEnum) {
             case test:
-                return TestPrototypeBuiltinsFactory.TestBuiltinNodeGen.create(context, builtin, args().withThis().fixedArgs(1).createArgumentNodes(context));
+                return TestPrototypeBuiltinsFactory.TestBuiltinNodeGen.create(context, builtin, args().withThis().createArgumentNodes(context));
             case next:
-                return TestPrototypeBuiltinsFactory.TestNextBuiltinNodeGen.create(context, builtin, args().withThis().fixedArgs(1).createArgumentNodes(context));
+                return TestPrototypeBuiltinsFactory.TestNextBuiltinNodeGen.create(context, builtin, args().withThis().createArgumentNodes(context));
+            case toArray:
+                return TestPrototypeBuiltinsFactory.TestToArrayBuiltinNodeGen.create(context, builtin, args().withThis().fixedArgs(0).createArgumentNodes(context));
         }
         return null;
     }
 
     private static final HiddenKey TARGET_ID = new HiddenKey("testtarget");
-    private static final HiddenKey FUNC_ID = new HiddenKey("testfunc");
-    private static final HiddenKey CALLBACK_ID = new HiddenKey("testcallback");
 
     public abstract static class TestBuiltin extends JSBuiltinNode {
-        static final class InnerRootNode extends JavaScriptRootNode {
-            @Child private JSFunctionCallNode callMapperNode;
-            @Child private JSFunctionCallNode callTargetNode;
-            @Child private PropertyGetNode getMapperNode;
-            @Child private PropertyGetNode getTargetNode;
-            @Child private PropertyGetNode getFuncNode;
-            @Child private JavaScriptNode argNode;
-
-            private final JSContext context;
-
-            private InnerRootNode(JSContext context) {
-                super();
-
-                this.context = context;
-
-                callMapperNode = JSFunctionCallNode.createCall();
-                callTargetNode = JSFunctionCallNode.createCall();
-                getMapperNode = PropertyGetNode.createGetHidden(FUNC_ID, context);
-                getTargetNode = PropertyGetNode.createGetHidden(TARGET_ID, context);
-                getFuncNode = PropertyGetNode.create(Strings.constant("next"), false, context);
-                argNode = AccessIndexedArgumentNode.create(0);
-            }
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                Object thisObj = JSFrameUtil.getThisObj(frame);
-
-                Object target = getTargetNode.getValue(thisObj);
-                Object func = getFuncNode.getValue(target);
-                Object result = callTargetNode.executeCall(JSArguments.createOneArg(target, func, argNode.execute(frame)));
-
-                Object mapper = getMapperNode.getValue(thisObj);
-                return callMapperNode.executeCall(JSArguments.createOneArg(Undefined.instance, mapper, result));
-            }
-
-            @Override
-            public boolean isCloningAllowed() {
-                return true;
-            }
-
-            @Override
-            protected boolean isCloneUninitializedSupported() {
-                return true;
-            }
-
-            @Override
-            protected RootNode cloneUninitialized() {
-                return create(context);
-            }
-
-            public static InnerRootNode create(JSContext context) {
-                return new InnerRootNode(context);
-            }
-        }
-
         @Child private CreateObjectNode.CreateObjectWithPrototypeNode createObjectNode;
-        @Child private PropertySetNode setFuncNode;
         @Child private PropertySetNode setTargetNode;
-        @Child private PropertySetNode setCallbackNode;
 
-        private final JSFunctionData innerFn;
         private final JSDynamicObject prototype;
 
         protected TestBuiltin(JSContext context, JSBuiltin builtin) {
@@ -142,47 +92,102 @@ public final class TestPrototypeBuiltins extends JSBuiltinsContainer.SwitchEnum<
             this.prototype = createPrototype();
 
             createObjectNode = CreateObjectNode.createOrdinaryWithPrototype(context);
-            setFuncNode = PropertySetNode.createSetHidden(FUNC_ID, context);
             setTargetNode = PropertySetNode.createSetHidden(TARGET_ID, context);
-            setCallbackNode = PropertySetNode.createSetHidden(CALLBACK_ID, context);
-            innerFn = JSFunctionData.create(context, new InnerRootNode(context).getCallTarget(), 0, Strings.EMPTY);
         }
 
         @Specialization
-        public Object test(Object thisObj, Object func) {
+        public Object test(Object target) {
             JSDynamicObject result = createObjectNode.execute(this.prototype);
-            setTargetNode.setValue(result, thisObj);
-            setFuncNode.setValue(result, func);
-            setCallbackNode.setValue(result, JSFunction.create(getRealm(), innerFn));
+            setTargetNode.setValue(result, target);
             return result;
         }
 
         private JSDynamicObject createPrototype() {
-            return getRealm().getArrayPrototype();
-
-            // //This fixes it but creates a new prototype every time
-            //JSObject prototype = JSObjectUtil.createOrdinaryPrototypeObject(getRealm(), getRealm().getObjectPrototype());
-            //JSObjectUtil.putFunctionsFromContainer(getRealm(), prototype, new TestPrototypeBuiltins());
-            //return prototype;
+            //Workaround for another issue: https://github.com/oracle/graaljs/issues/636
+            JSObject prototype = JSObjectUtil.createOrdinaryPrototypeObject(getRealm(), getRealm().getObjectPrototype());
+            JSObjectUtil.putFunctionsFromContainer(getRealm(), prototype, new TestPrototypeBuiltins());
+            return prototype;
         }
 
     }
 
     public abstract static class TestNextBuiltin extends JSBuiltinNode {
-        @Child private JSFunctionCallNode callNode;
-        @Child private PropertyGetNode getCallBackNode;
+        @Child private JSFunctionCallNode callNextNode;
+        @Child private PropertyGetNode getTargetNode;
+        @Child private PropertyGetNode getNextNode;
+        @Child private PropertyGetNode getValueNode;
+        @Child private PropertyGetNode getDoneNode;
+        @Child private JSToBooleanNode toBooleanNode;
+        @Child private CreateIterResultObjectNode createIterResultObjectNode;
 
         public TestNextBuiltin(JSContext context, JSBuiltin builtin) {
             super(context, builtin);
 
-            callNode = JSFunctionCallNode.createCall();
-            getCallBackNode = PropertyGetNode.createGetHidden(CALLBACK_ID, context);
+            callNextNode = JSFunctionCallNode.createCall();
+            getTargetNode = PropertyGetNode.createGetHidden(TARGET_ID, context);
+            getNextNode = PropertyGetNode.create(Strings.NEXT, false, context);
+            getValueNode = PropertyGetNode.create(Strings.VALUE, false, context);
+            getDoneNode = PropertyGetNode.create(Strings.DONE, false, context);
+            toBooleanNode = JSToBooleanNode.create();
+            createIterResultObjectNode = CreateIterResultObjectNode.create(context);
         }
 
         @Specialization
-        public Object next(VirtualFrame frame, Object thisObj, Object arg) {
-            //Inlining the call here manually does resolve the issue but would not allow for multiple InnerRootNode implementations
-            return callNode.executeCall(JSArguments.createOneArg(thisObj, getCallBackNode.getValue(thisObj), arg));
+        public Object next(VirtualFrame frame, Object thisObj) {
+            Object target = getTargetNode.getValue(thisObj);
+            Object next = getNextNode.getValue(target);
+
+            Object result = callNextNode.executeCall(JSArguments.createZeroArg(target, next));
+            if (toBooleanNode.executeBoolean(getDoneNode.getValue(result))) {
+                return createIterResultObjectNode.execute(frame, Undefined.instance, true);
+            }
+
+            try {
+                return createIterResultObjectNode.execute(frame, getValueNode.getValueInt(result) + 1337, false);
+            } catch (UnexpectedResultException e) {
+                throw Errors.shouldNotReachHere();
+            }
+        }
+    }
+
+    public abstract static class TestToArrayBuiltin extends JSBuiltinNode {
+        @Child private JSFunctionCallNode callNextNode;
+        @Child private PropertyGetNode getTargetNode;
+        @Child private PropertyGetNode getNextNode;
+        @Child private PropertyGetNode getValueNode;
+        @Child private PropertyGetNode getDoneNode;
+        @Child private JSToBooleanNode toBooleanNode;
+
+        protected TestToArrayBuiltin(JSContext context, JSBuiltin builtin) {
+            super(context, builtin);
+
+            callNextNode = JSFunctionCallNode.createCall();
+            getTargetNode = PropertyGetNode.createGetHidden(TARGET_ID, context);
+            getNextNode = PropertyGetNode.create(Strings.NEXT, false, context);
+            getValueNode = PropertyGetNode.create(Strings.VALUE, false, context);
+            getDoneNode = PropertyGetNode.create(Strings.DONE, false, context);
+            toBooleanNode = JSToBooleanNode.create();
+        }
+
+        @Specialization
+        public Object toArray(Object thisObj, @Cached("create()")BranchProfile growProfile) {
+            Object target = getTargetNode.getValue(thisObj);
+            Object next = getNextNode.getValue(target);
+
+            SimpleArrayList<Object> elements = new SimpleArrayList<>(100000);
+
+            while (true) {
+                Object result = callNextNode.executeCall(JSArguments.createZeroArg(target, next));
+                if (toBooleanNode.executeBoolean(getDoneNode.getValue(result))) {
+                    return JSArray.createZeroBasedObjectArray(getContext(), getRealm(), elements.toArray());
+                }
+
+                try {
+                    elements.add(getValueNode.getValueInt(result), growProfile);
+                } catch (UnexpectedResultException e) {
+                    throw Errors.shouldNotReachHere();
+                }
+            }
         }
     }
 }

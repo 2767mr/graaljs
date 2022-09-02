@@ -205,7 +205,7 @@ public final class JSArray extends JSAbstractArray implements JSConstructorFacto
         JSObjectUtil.setOrVerifyPrototype(ctx, arrayPrototype, realm.getObjectPrototype());
 
         putConstructorProperty(ctx, arrayPrototype, ctor);
-        putFunctionsFromContainer(realm, arrayPrototype, TestPrototypeBuiltins.BUILTINS);
+        putFunctionsFromContainer(realm, arrayPrototype, ArrayPrototypeBuiltins.BUILTINS);
         // sets the length just for the prototype
         // putProxyProperty(arrayPrototype, ARRAY_LENGTH_PROXY_PROPERTY);
         JSObjectUtil.putProxyProperty(arrayPrototype, LENGTH, ARRAY_LENGTH_PROPERTY_PROXY, JSAttributes.notConfigurableNotEnumerableWritable());

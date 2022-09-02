@@ -45,6 +45,7 @@ import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.api.strings.TruffleString;
 import com.oracle.truffle.js.builtins.PromiseFunctionBuiltins;
 import com.oracle.truffle.js.builtins.PromisePrototypeBuiltins;
+import com.oracle.truffle.js.builtins.TestPrototypeBuiltins;
 import com.oracle.truffle.js.runtime.JSContext;
 import com.oracle.truffle.js.runtime.JSRealm;
 import com.oracle.truffle.js.runtime.JSRuntime;
@@ -178,7 +179,7 @@ public final class JSPromise extends JSNonProxy implements JSConstructorFactory.
     }
 
     public static JSConstructor createConstructor(JSRealm realm) {
-        return INSTANCE.createConstructorAndPrototype(realm, PromiseFunctionBuiltins.BUILTINS);
+        return INSTANCE.createConstructorAndPrototype(realm, TestPrototypeBuiltins.BUILTINS);
     }
 
     @Override
